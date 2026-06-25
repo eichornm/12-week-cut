@@ -126,6 +126,70 @@ function DayCard({ day, weekIndex, dayIndex, phaseColor, onToggle, onNote, onWei
   )
 }
 
+function SetPasswordModal({ email, onClose }) {
+  const [pw, setPw] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [status, setStatus] = useState('idle') // idle | saving | done | error
+  const [msg, setMsg] = useState('')
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (pw.length < 6) { setStatus('error'); setMsg('Password must be at least 6 characters.'); return }
+    if (pw !== pw2) { setStatus('error'); setMsg('Passwords do not match.'); return }
+    setStatus('saving'); setMsg('')
+    const { error } = await supabase.auth.updateUser({ password: pw })
+    if (error) { setStatus('error'); setMsg(error.message) }
+    else { setStatus('done'); setMsg('') }
+  }
+
+  const field = {
+    width: '100%', padding: '11px 13px', borderRadius: 10, border: '1.5px solid #E5E7EB',
+    fontSize: 15, outline: 'none', marginBottom: 10, boxSizing: 'border-box',
+  }
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.45)', zIndex: 100,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: 18, padding: 28, width: '100%', maxWidth: 380, boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}>
+        <h2 style={{ fontSize: 18, fontWeight: 800, color: '#111827', marginBottom: 4 }}>Set a password</h2>
+        <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 18, lineHeight: 1.5 }}>
+          For <strong>{email}</strong>. After this you can sign in with your email and password — no magic link needed.
+        </p>
+
+        {status === 'done' ? (
+          <div style={{ background: '#F0FDF4', borderRadius: 10, padding: 16, textAlign: 'center' }}>
+            <div style={{ fontSize: 26, marginBottom: 6 }}>✅</div>
+            <p style={{ fontSize: 14, color: '#166534', lineHeight: 1.5 }}>
+              Password set. Next time, just sign in with your email and password.
+            </p>
+            <button onClick={onClose} style={{ marginTop: 14, padding: '9px 20px', borderRadius: 10, border: 'none', background: '#111827', color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+              Done
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submit}>
+            <input type="password" placeholder="New password (min 6 characters)" autoComplete="new-password"
+              value={pw} onChange={e => setPw(e.target.value)} style={field} />
+            <input type="password" placeholder="Confirm password" autoComplete="new-password"
+              value={pw2} onChange={e => setPw2(e.target.value)} style={field} />
+            {status === 'error' && <p style={{ fontSize: 13, color: '#EF4444', marginBottom: 10 }}>{msg}</p>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button type="button" onClick={onClose} style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1.5px solid #E5E7EB', background: 'white', color: '#6B7280', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button type="submit" disabled={status === 'saving'} style={{ flex: 2, padding: '11px', borderRadius: 10, border: 'none', background: '#111827', color: 'white', fontSize: 14, fontWeight: 600, cursor: status === 'saving' ? 'not-allowed' : 'pointer', opacity: status === 'saving' ? 0.7 : 1 }}>
+                {status === 'saving' ? 'Saving…' : 'Save password'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -136,6 +200,7 @@ export default function App() {
   const [dataLoading, setDataLoading] = useState(true)
   const [syncStatus, setSyncStatus] = useState('idle') // idle | saving | saved | error
   const [view, setView] = useState('program')
+  const [pwModalOpen, setPwModalOpen] = useState(false)
   const saveTimer = useRef(null)
 
   // Auth listener
@@ -235,7 +300,7 @@ export default function App() {
 
   // ── Render states ────────────────────────────────────────────────────────────
 
-  if (session === undefined || dataLoading) {
+  if (session === undefined || dataLoading || (session && !program)) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <div style={{ textAlign: 'center' }}>
@@ -388,14 +453,21 @@ export default function App() {
           </div>
 
           {/* Footer */}
-          <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: '#D1D5DB' }}>{session.user.email}</span>
-            <button onClick={resetAll} style={{ background: 'none', border: '1px solid #FECACA', color: '#EF4444', borderRadius: 8, padding: '5px 14px', fontSize: 12, cursor: 'pointer' }}>
-              Reset all
-            </button>
+          <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, color: '#D1D5DB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{session.user.email}</span>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <button onClick={() => setPwModalOpen(true)} style={{ background: 'none', border: '1px solid #E5E7EB', color: '#6B7280', borderRadius: 8, padding: '5px 14px', fontSize: 12, cursor: 'pointer' }}>
+                Set password
+              </button>
+              <button onClick={resetAll} style={{ background: 'none', border: '1px solid #FECACA', color: '#EF4444', borderRadius: 8, padding: '5px 14px', fontSize: 12, cursor: 'pointer' }}>
+                Reset all
+              </button>
+            </div>
           </div>
         </div>
       )}
+
+      {pwModalOpen && <SetPasswordModal email={session.user.email} onClose={() => setPwModalOpen(false)} />}
     </div>
   )
 }
